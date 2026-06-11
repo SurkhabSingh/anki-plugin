@@ -9,3 +9,4 @@
 *.ankiaddon
 *.md
 !README.md
+.ps1

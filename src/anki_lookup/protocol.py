@@ -6,6 +6,8 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from .dictionary import LookupEntry
+
 MESSAGE_PREFIX = "anki_lookup:"
 MAXIMUM_TERM_LENGTH = 500
 
@@ -42,18 +44,26 @@ def parse_lookup_message(message: str) -> LookupRequest | None:
     return LookupRequest(request_id=request_id, term=normalized_term)
 
 
-def placeholder_result(request: LookupRequest) -> dict[str, Any]:
-    """Return a Phase 1 result while dictionary search is not implemented."""
+def lookup_result(request: LookupRequest, entries: list[LookupEntry]) -> dict[str, Any]:
+    """Serialize dictionary lookup entries for the webview."""
 
+    status = "ready" if entries else "empty"
     return {
         "request_id": request.request_id,
-        "status": "ready",
+        "status": status,
         "term": request.term,
-        "reading": "",
-        "source": "Phase 1 scanner",
-        "definitions": [
-            "Word detection and popup delivery are working.",
-            "Dictionary definitions will be connected in Phase 2.",
+        "entries": [
+            {
+                "expression": entry.expression,
+                "reading": entry.reading,
+                "dictionary": entry.dictionary,
+                "term_tags": list(entry.term_tags),
+                "definition_tags": list(entry.definition_tags),
+                "definitions": list(entry.definitions),
+                "match_type": entry.match_type,
+                "score": entry.score,
+            }
+            for entry in entries
         ],
     }
 

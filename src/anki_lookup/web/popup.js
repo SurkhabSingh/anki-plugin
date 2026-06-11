@@ -47,7 +47,7 @@
             "</div>",
             "</header>",
             '<div class="anki-lookup__body"></div>',
-            '<footer class="anki-lookup__footer">Anki Lookup · Phase 1</footer>',
+            '<footer class="anki-lookup__footer">Anki Lookup - Phase 2</footer>',
         ].join("");
         popup.addEventListener("pointermove", (event) => event.stopPropagation());
         popup.addEventListener("click", onPopupClick);
@@ -174,6 +174,8 @@
             }
             if (response.status === "ready") {
                 showResult(response, rect);
+            } else if (response.status === "empty") {
+                showEmpty(response.term || term, rect);
             } else {
                 showError(response.message || "Lookup failed.", rect);
             }
@@ -184,7 +186,7 @@
         const element = createPopup();
         element.querySelector(".anki-lookup__term").textContent = term;
         element.querySelector(".anki-lookup__body").innerHTML =
-            '<div class="anki-lookup__status">Looking up…</div>';
+            '<div class="anki-lookup__status">Looking up...</div>';
         positionPopup(rect);
         element.classList.add("anki-lookup--visible");
     }
@@ -195,19 +197,63 @@
         const body = element.querySelector(".anki-lookup__body");
         body.replaceChildren();
 
-        const source = document.createElement("div");
-        source.className = "anki-lookup__source";
-        source.textContent = response.source || "Lookup";
-        body.appendChild(source);
+        for (const entry of response.entries || []) {
+            const entryElement = document.createElement("article");
+            entryElement.className = "anki-lookup__entry";
 
-        const list = document.createElement("ol");
-        list.className = "anki-lookup__definitions";
-        for (const definition of response.definitions || []) {
-            const item = document.createElement("li");
-            item.textContent = definition;
-            list.appendChild(item);
+            const heading = document.createElement("div");
+            heading.className = "anki-lookup__entry-heading";
+            const expression = document.createElement("strong");
+            expression.textContent = entry.expression;
+            heading.appendChild(expression);
+            if (entry.reading && entry.reading !== entry.expression) {
+                const reading = document.createElement("span");
+                reading.className = "anki-lookup__reading";
+                reading.textContent = entry.reading;
+                heading.appendChild(reading);
+            }
+            entryElement.appendChild(heading);
+
+            const source = document.createElement("div");
+            source.className = "anki-lookup__source";
+            source.textContent = entry.dictionary;
+            entryElement.appendChild(source);
+
+            const tags = [...(entry.term_tags || []), ...(entry.definition_tags || [])];
+            if (tags.length) {
+                const tagList = document.createElement("div");
+                tagList.className = "anki-lookup__tags";
+                for (const tag of tags) {
+                    const tagElement = document.createElement("span");
+                    tagElement.textContent = tag;
+                    tagList.appendChild(tagElement);
+                }
+                entryElement.appendChild(tagList);
+            }
+
+            const list = document.createElement("ol");
+            list.className = "anki-lookup__definitions";
+            for (const definition of entry.definitions || []) {
+                const item = document.createElement("li");
+                item.textContent = definition;
+                list.appendChild(item);
+            }
+            entryElement.appendChild(list);
+            body.appendChild(entryElement);
         }
-        body.appendChild(list);
+        positionPopup(rect);
+        element.classList.add("anki-lookup--visible");
+    }
+
+    function showEmpty(term, rect) {
+        const element = createPopup();
+        element.querySelector(".anki-lookup__term").textContent = term;
+        element.querySelector(".anki-lookup__body").replaceChildren();
+        const empty = document.createElement("div");
+        empty.className = "anki-lookup__status";
+        empty.textContent =
+            "No matching entries. Import or enable a compatible term dictionary.";
+        element.querySelector(".anki-lookup__body").appendChild(empty);
         positionPopup(rect);
         element.classList.add("anki-lookup--visible");
     }
@@ -294,4 +340,3 @@
         window.clearTimeout(movementTimer);
     });
 })();
-

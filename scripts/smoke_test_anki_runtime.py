@@ -50,6 +50,9 @@ def main() -> int:
                 }
             }
 
+        def addonsFolder(self, module_name: str) -> str:
+            return str(arguments.addons_directory / arguments.package)
+
     main_window = QMainWindow()
     main_window.form = SimpleNamespace(menuTools=QMenu(main_window))
     main_window.addonManager = FakeAddonManager()
@@ -60,6 +63,17 @@ def main() -> int:
     expected_action = "Anki Lookup: About"
     if expected_action not in action_names:
         raise RuntimeError(f"Expected Tools action was not installed: {action_names}")
+    dictionary_action = "Anki Lookup: Manage Dictionaries..."
+    if dictionary_action not in action_names:
+        raise RuntimeError(f"Dictionary manager action was not installed: {action_names}")
+
+    dictionary_manager_module = importlib.import_module(
+        f"{arguments.package}.ui.dictionary_manager"
+    )
+    manager = dictionary_manager_module.DictionaryManager(main_window)
+    if manager.dialog.windowTitle() != "Anki Lookup Dictionaries":
+        raise RuntimeError("Dictionary manager dialog did not initialize correctly")
+    manager.dialog.close()
 
     reviewer = object.__new__(Reviewer)
     web_content = WebContent()
@@ -74,7 +88,11 @@ def main() -> int:
     handled, result = hooks.on_webview_did_receive_js_message(
         (False, None), bridge_message, reviewer
     )
-    if not handled or result.get("term") != "runtime":
+    if (
+        not handled
+        or result.get("term") != "runtime"
+        or result.get("status") not in {"ready", "empty"}
+    ):
         raise RuntimeError(f"Lookup bridge did not return a result: {result}")
 
     print(
@@ -85,6 +103,8 @@ def main() -> int:
                 "hook_registered": True,
                 "action_visible": True,
                 "action_name": expected_action,
+                "dictionary_manager_action_visible": True,
+                "dictionary_manager_constructed": True,
                 "reviewer_assets_injected": True,
                 "lookup_bridge_handled": True,
             }

@@ -6,7 +6,8 @@ import json
 from typing import Any
 
 from .config import runtime_config
-from .protocol import error_result, parse_lookup_message, placeholder_result
+from .protocol import error_result, lookup_result, parse_lookup_message
+from .runtime import dictionary_service
 
 _registered = False
 
@@ -62,7 +63,11 @@ def on_webview_did_receive_js_message(
     if request is None:
         return handled
 
-    return (True, placeholder_result(request))
+    try:
+        entries = dictionary_service().lookup(request.term)
+    except Exception:
+        return (True, error_result("Dictionary lookup failed.", request.request_id))
+    return (True, lookup_result(request, entries))
 
 
 def _is_reviewer(context: object | None) -> bool:
