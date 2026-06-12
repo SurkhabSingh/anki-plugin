@@ -657,7 +657,27 @@
             if (entry.inflection_reasons && entry.inflection_reasons.length) {
                 const inflection = document.createElement("div");
                 inflection.className = "anki-lookup__inflection";
-                inflection.textContent = entry.inflection_reasons.join(" → ");
+                inflection.setAttribute(
+                    "aria-label",
+                    `Conjugation breakdown: ${entry.inflection_reasons.join(", ")}`
+                );
+                const icon = document.createElement("span");
+                icon.className = "anki-lookup__inflection-icon";
+                icon.setAttribute("aria-hidden", "true");
+                inflection.appendChild(icon);
+                entry.inflection_reasons.forEach((reason, index) => {
+                    if (index > 0) {
+                        const separator = document.createElement("span");
+                        separator.className = "anki-lookup__inflection-separator";
+                        separator.textContent = "←";
+                        separator.setAttribute("aria-hidden", "true");
+                        inflection.appendChild(separator);
+                    }
+                    const step = document.createElement("span");
+                    step.className = "anki-lookup__inflection-step";
+                    step.textContent = reason;
+                    inflection.appendChild(step);
+                });
                 entryElement.appendChild(inflection);
             }
             const list = document.createElement("ol");

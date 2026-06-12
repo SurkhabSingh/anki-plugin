@@ -7,6 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from ..language import language_profiles
+from ..language.models import MorphologyCandidate
 from .importer import DictionaryImportCancelled, import_dictionary
 from .models import BatchImportResult, DictionaryInfo, ImportFailure, ImportResult, LookupEntry
 from .normalization import normalize_term
@@ -73,16 +74,12 @@ class DictionaryService:
                 (),
                 limit,
             )
-            transformed = expansions[1:]
+            transformed = self._coalesce_expansions(expansions[1:])
             transformed_matches = (
                 self.repository.search_exact_many(
                     tuple(expansion.term for expansion in transformed),
                     limit,
-                    required_rules={
-                        expansion.term: expansion.required_rules
-                        for expansion in transformed
-                        if expansion.required_rules
-                    },
+                    required_rules=self._required_rules_by_term(transformed),
                     direct_match_type="deinflected",
                     include_kanji=False,
                 )
@@ -123,6 +120,33 @@ class DictionaryService:
             return grouped_results[0][0], self._merge_source_groups(grouped_results, limit)
 
         return fallback, self.lookup(fallback, limit)
+
+    @staticmethod
+    def _coalesce_expansions(
+        expansions: tuple[MorphologyCandidate, ...],
+    ) -> tuple[MorphologyCandidate, ...]:
+        merged: dict[str, MorphologyCandidate] = {}
+        for expansion in expansions:
+            key = normalize_term(expansion.term)
+            existing = merged.get(key)
+            if existing is None:
+                merged[key] = expansion
+                continue
+            merged[key] = replace(
+                existing,
+                required_rules=existing.required_rules | expansion.required_rules,
+            )
+        return tuple(merged.values())
+
+    @staticmethod
+    def _required_rules_by_term(
+        expansions: tuple[MorphologyCandidate, ...],
+    ) -> dict[str, frozenset[str]]:
+        return {
+            expansion.term: expansion.required_rules
+            for expansion in expansions
+            if expansion.required_rules
+        }
 
     @staticmethod
     def _merge_source_groups(

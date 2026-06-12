@@ -93,6 +93,45 @@ class DictionaryRepositoryTests(unittest.TestCase):
 
         self.assertEqual([entry.definitions for entry in results["はがす"]], [("typed",)])
 
+    def test_bulk_deinflection_accepts_compatible_rule_subtypes(self) -> None:
+        archive = artifact_path("first.zip")
+        write_dictionary(
+            archive,
+            terms=[
+                ["行く", "いく", "", "v5k-s", 20, ["to go"], 1, ""],
+                ["行く", "ゆく", "", "", 10, ["untyped"], 2, ""],
+            ],
+        )
+        import_dictionary(self.database_path, archive)
+
+        results = DictionaryRepository(self.database_path).search_exact_many(
+            ("行く",),
+            required_rules={"行く": frozenset({"v5k"})},
+            direct_match_type="deinflected",
+            include_kanji=False,
+        )
+
+        self.assertEqual([entry.definitions for entry in results["行く"]], [("to go",)])
+
+    def test_bulk_deinflection_accepts_metadata_free_dictionaries(self) -> None:
+        archive = artifact_path("first.zip")
+        write_dictionary(
+            archive,
+            terms=[
+                ["食べる", "たべる", "", "", 20, ["to eat"], 1, ""],
+            ],
+        )
+        import_dictionary(self.database_path, archive)
+
+        results = DictionaryRepository(self.database_path).search_exact_many(
+            ("食べる",),
+            required_rules={"食べる": frozenset({"v1"})},
+            direct_match_type="deinflected",
+            include_kanji=False,
+        )
+
+        self.assertEqual([entry.expression for entry in results["食べる"]], ["食べる"])
+
     def test_enable_disable_reorder_and_remove(self) -> None:
         first_archive = artifact_path("first.zip")
         second_archive = artifact_path("second.zip")

@@ -69,6 +69,7 @@ class DictionaryRepository:
                     t.expression,
                     t.reading,
                     d.title,
+                    d.has_rule_metadata,
                     t.term_tags,
                     t.rules,
                     t.definition_tags,
@@ -115,9 +116,11 @@ class DictionaryRepository:
             ).fetchall()
             if required_rules:
                 term_rows = [
-                    row for row in term_rows if _rules_match(required_rules, row[3], row[4])
+                    row
+                    for row in term_rows
+                    if not row[3] or _rules_match(required_rules, row[4], row[5])
                 ]
-            direct_term_ids = {row[10] for row in term_rows}
+            direct_term_ids = {row[11] for row in term_rows}
             reverse_rows = []
             if include_reverse and _is_reverse_lookup_query(query) and len(term_rows) < limit:
                 reverse_rows = connection.execute(
@@ -161,19 +164,19 @@ class DictionaryRepository:
 
         ranked_entries = [
             (
-                row[9],
-                row[7],
-                -row[8],
                 row[10],
+                row[8],
+                -row[9],
+                row[11],
                 LookupEntry(
                     expression=row[0],
                     reading=row[1],
                     dictionary=row[2],
-                    term_tags=tuple(row[3].split()),
-                    definition_tags=tuple(row[5].split()),
-                    definitions=tuple(json.loads(row[6])),
-                    match_type=direct_match_type or ("exact", "reading")[row[7]],
-                    score=row[8],
+                    term_tags=tuple(row[4].split()),
+                    definition_tags=tuple(row[6].split()),
+                    definitions=tuple(json.loads(row[7])),
+                    match_type=direct_match_type or ("exact", "reading")[row[8]],
+                    score=row[9],
                 ),
             )
             for row in term_rows
@@ -267,6 +270,7 @@ class DictionaryRepository:
                         t.expression,
                         t.reading,
                         d.title,
+                        d.has_rule_metadata,
                         t.term_tags,
                         t.rules,
                         t.definition_tags,
@@ -302,6 +306,7 @@ class DictionaryRepository:
                     expression,
                     reading,
                     title,
+                    has_rule_metadata,
                     term_tags,
                     rules,
                     definition_tags,
@@ -371,23 +376,23 @@ class DictionaryRepository:
         }
         for row in term_rows:
             rules = normalized_rules.get(row[0], frozenset())
-            if rules and not _rules_match(rules, row[5], row[6]):
+            if rules and row[5] and not _rules_match(rules, row[6], row[7]):
                 continue
             ranked_by_query[row[0]].append(
                 (
-                    row[11],
-                    row[9],
-                    -row[10],
                     row[12],
+                    row[10],
+                    -row[11],
+                    row[13],
                     LookupEntry(
                         expression=row[2],
                         reading=row[3],
                         dictionary=row[4],
-                        term_tags=tuple(row[5].split()),
-                        definition_tags=tuple(row[7].split()),
-                        definitions=tuple(json.loads(row[8])),
-                        match_type=direct_match_type or ("exact", "reading")[row[9]],
-                        score=row[10],
+                        term_tags=tuple(row[6].split()),
+                        definition_tags=tuple(row[8].split()),
+                        definitions=tuple(json.loads(row[9])),
+                        match_type=direct_match_type or ("exact", "reading")[row[10]],
+                        score=row[11],
                     ),
                 )
             )
@@ -508,4 +513,18 @@ def _fts_phrase(query: str) -> str:
 
 def _rules_match(required: frozenset[str], term_tags: str, rules: str) -> bool:
     available = frozenset((*term_tags.split(), *rules.split()))
-    return bool(required & available)
+    return any(
+        _rule_is_compatible(required_rule, available_rule)
+        for required_rule in required
+        for available_rule in available
+    )
+
+
+def _rule_is_compatible(required: str, available: str) -> bool:
+    if required == available:
+        return True
+    if required.startswith("v5"):
+        return available == "v5" or available.startswith(required + "-")
+    if required in {"v1", "vs"}:
+        return available.startswith(required + "-")
+    return False

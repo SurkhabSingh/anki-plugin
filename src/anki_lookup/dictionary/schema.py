@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def initialize_database(connection: sqlite3.Connection) -> None:
@@ -28,6 +28,8 @@ def initialize_database(connection: sqlite3.Connection) -> None:
             priority INTEGER NOT NULL,
             term_count INTEGER NOT NULL DEFAULT 0,
             kanji_count INTEGER NOT NULL DEFAULT 0,
+            has_rule_metadata INTEGER NOT NULL DEFAULT 0
+                CHECK (has_rule_metadata IN (0, 1)),
             imported_at TEXT NOT NULL,
             UNIQUE(title, revision)
         );
@@ -120,7 +122,7 @@ def initialize_database(connection: sqlite3.Connection) -> None:
             "INSERT INTO schema_meta(key, value) VALUES('schema_version', ?)",
             (str(SCHEMA_VERSION),),
         )
-    elif int(existing[0]) in {1, 2, 3}:
+    elif int(existing[0]) in {1, 2, 3, 4}:
         existing_version = int(existing[0])
         dictionary_columns = {
             row[1] for row in connection.execute("PRAGMA table_info(dictionaries)").fetchall()
@@ -128,6 +130,14 @@ def initialize_database(connection: sqlite3.Connection) -> None:
         if "kanji_count" not in dictionary_columns:
             connection.execute(
                 "ALTER TABLE dictionaries ADD COLUMN kanji_count INTEGER NOT NULL DEFAULT 0"
+            )
+        if "has_rule_metadata" not in dictionary_columns:
+            connection.execute(
+                """
+                ALTER TABLE dictionaries
+                ADD COLUMN has_rule_metadata INTEGER NOT NULL DEFAULT 0
+                CHECK (has_rule_metadata IN (0, 1))
+                """
             )
         term_columns = {row[1] for row in connection.execute("PRAGMA table_info(terms)").fetchall()}
         if "rules" not in term_columns:
@@ -141,6 +151,27 @@ def initialize_database(connection: sqlite3.Connection) -> None:
                 WHERE definitions_json GLOB '*[A-Za-z]*'
                 """
             )
+        connection.execute(
+            """
+            UPDATE dictionaries
+            SET has_rule_metadata = CASE
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM tags
+                    WHERE tags.dictionary_id = dictionaries.id
+                      AND lower(tags.category) = 'partofspeech'
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM terms
+                    WHERE terms.dictionary_id = dictionaries.id
+                      AND trim(terms.rules) <> ''
+                )
+                THEN 1
+                ELSE 0
+            END
+            """
+        )
         connection.execute(
             "UPDATE schema_meta SET value = ? WHERE key = 'schema_version'",
             (str(SCHEMA_VERSION),),

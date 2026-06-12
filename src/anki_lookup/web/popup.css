@@ -257,13 +257,51 @@
 
 .anki-lookup-popup .anki-lookup__inflection {
     display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.25em;
     margin: 0 0 10px;
-    padding: 2px 7px;
+    padding: 3px 8px;
     color: var(--anki-lookup-accent);
     background: var(--anki-lookup-accent-soft);
-    border-radius: 999px;
+    border: 1px solid var(--anki-lookup-border);
+    border-radius: 6px;
     font-size: 0.72em;
     font-weight: 600;
+}
+
+.anki-lookup-popup .anki-lookup__inflection-icon {
+    position: relative;
+    width: 0.9em;
+    height: 0.9em;
+    margin-inline-end: 0.1em;
+}
+
+.anki-lookup-popup .anki-lookup__inflection-icon::before,
+.anki-lookup-popup .anki-lookup__inflection-icon::after {
+    position: absolute;
+    content: "";
+}
+
+.anki-lookup-popup .anki-lookup__inflection-icon::before {
+    inset: 0.1em 0.25em 0.25em 0.1em;
+    border-left: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    border-radius: 0 0 0 3px;
+}
+
+.anki-lookup-popup .anki-lookup__inflection-icon::after {
+    right: 0.08em;
+    bottom: 0.12em;
+    width: 0.35em;
+    height: 0.35em;
+    background: currentColor;
+    border-radius: 50%;
+}
+
+.anki-lookup-popup .anki-lookup__inflection-separator {
+    opacity: 0.72;
+    font-weight: 500;
 }
 
 .anki-lookup-popup .anki-lookup__dictionary-section + .anki-lookup__dictionary-section {

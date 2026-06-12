@@ -82,6 +82,64 @@ class DictionaryServiceTests(unittest.TestCase):
         self.assertEqual(entries[0].match_type, "deinflected")
         self.assertEqual(entries[0].inflection_reasons, ("continuative",))
 
+    def test_lookup_candidates_returns_complete_japanese_inflection_chain(self) -> None:
+        write_dictionary(
+            self.valid_archive,
+            title="Japanese",
+            terms=[
+                ["食べる", "たべる", "", "v1", 0, ["to eat"], 1, ""],
+            ],
+        )
+        service = DictionaryService(self.database_path)
+        service.import_archive(self.valid_archive)
+
+        matched_term, entries = service.lookup_candidates(("食べていた",), "食べていた")
+
+        self.assertEqual(matched_term, "食べていた")
+        self.assertEqual(entries[0].expression, "食べる")
+        self.assertEqual(entries[0].match_type, "deinflected")
+        self.assertEqual(entries[0].inflection_reasons, ("-て", "-いる", "-た"))
+
+    def test_lookup_candidates_accepts_special_godan_dictionary_rules(self) -> None:
+        write_dictionary(
+            self.valid_archive,
+            title="Japanese",
+            terms=[
+                ["行く", "いく", "", "v5k-s", 0, ["to go"], 1, ""],
+                ["行う", "おこなう", "", "v5u", 0, ["to perform"], 2, ""],
+            ],
+        )
+        service = DictionaryService(self.database_path)
+        service.import_archive(self.valid_archive)
+
+        _, entries = service.lookup_candidates(("行っていた",), "行っていた")
+
+        self.assertEqual(entries[0].expression, "行く")
+        self.assertEqual(entries[0].inflection_reasons, ("-て", "-いる", "-た"))
+
+    def test_lookup_candidates_keeps_metadata_free_lemma_and_shorter_kanji_term(
+        self,
+    ) -> None:
+        write_dictionary(
+            self.valid_archive,
+            title="Japanese monolingual",
+            terms=[
+                ["食べる", "たべる", "", "", 20, ["to eat"], 1, ""],
+                ["食", "しょく", "", "", 10, ["food"], 2, ""],
+            ],
+        )
+        service = DictionaryService(self.database_path)
+        service.import_archive(self.valid_archive)
+
+        _, entries = service.lookup_candidates(
+            ("食べていた", "食べてい", "食べて", "食べ", "食"),
+            "食べていた",
+        )
+
+        self.assertEqual([entry.expression for entry in entries], ["食べる", "食"])
+        self.assertEqual(entries[0].inflection_reasons, ("-て", "-いる", "-た"))
+        self.assertEqual(entries[1].inflection_reasons, ())
+
     def test_lookup_candidates_uses_english_lemma_for_reverse_lookup(self) -> None:
         write_dictionary(
             self.valid_archive,

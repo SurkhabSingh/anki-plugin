@@ -48,7 +48,7 @@ class DictionarySchemaTests(unittest.TestCase):
                 "SELECT value FROM schema_meta WHERE key = 'schema_version'"
             ).fetchone()[0]
             dictionary = connection.execute(
-                "SELECT title, kanji_count FROM dictionaries"
+                "SELECT title, kanji_count, has_rule_metadata FROM dictionaries"
             ).fetchone()
             kanji_table = connection.execute(
                 "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'kanji'"
@@ -58,7 +58,7 @@ class DictionarySchemaTests(unittest.TestCase):
             ).fetchone()
 
         self.assertEqual(version, str(SCHEMA_VERSION))
-        self.assertEqual(dictionary, ("Existing", 0))
+        self.assertEqual(dictionary, ("Existing", 0, 0))
         self.assertIsNotNone(kanji_table)
         self.assertIsNotNone(reverse_index)
 
@@ -98,6 +98,32 @@ class DictionarySchemaTests(unittest.TestCase):
             ).fetchall()
 
         self.assertEqual(matches, [(1,)])
+
+    def test_migrates_rule_capability_from_part_of_speech_tags(self) -> None:
+        with closing(sqlite3.connect(self.database_path)) as connection, connection:
+            initialize_database(connection)
+            connection.executescript(
+                """
+                UPDATE schema_meta SET value = '4' WHERE key = 'schema_version';
+                INSERT INTO dictionaries(
+                    title, revision, format, source_filename, priority, imported_at
+                ) VALUES
+                    ('Grammar aware', '1', 3, 'aware.zip', 0, '2026-06-12'),
+                    ('Grammar free', '1', 3, 'free.zip', 1, '2026-06-12');
+                INSERT INTO tags(
+                    dictionary_id, name, category, sort_order, notes, score
+                ) VALUES(1, 'v1', 'partOfSpeech', 0, 'Ichidan verb', 0);
+                """
+            )
+            connection.execute("ALTER TABLE dictionaries DROP COLUMN has_rule_metadata")
+
+            initialize_database(connection)
+
+            capabilities = connection.execute(
+                "SELECT title, has_rule_metadata FROM dictionaries ORDER BY priority"
+            ).fetchall()
+
+        self.assertEqual(capabilities, [("Grammar aware", 1), ("Grammar free", 0)])
 
 
 def _remove_database(path: Path) -> None:

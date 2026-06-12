@@ -120,7 +120,24 @@ def import_dictionary(
                 connection.execute(
                     """
                     UPDATE dictionaries
-                    SET term_count = ?, kanji_count = ?
+                    SET term_count = ?,
+                        kanji_count = ?,
+                        has_rule_metadata = CASE
+                            WHEN EXISTS (
+                                SELECT 1
+                                FROM tags
+                                WHERE tags.dictionary_id = dictionaries.id
+                                  AND lower(tags.category) = 'partofspeech'
+                            )
+                            OR EXISTS (
+                                SELECT 1
+                                FROM terms
+                                WHERE terms.dictionary_id = dictionaries.id
+                                  AND trim(terms.rules) <> ''
+                            )
+                            THEN 1
+                            ELSE 0
+                        END
                     WHERE id = ?
                     """,
                     (term_count, kanji_count, dictionary_id),
