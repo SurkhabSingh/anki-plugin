@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import sys
 from pathlib import Path
+
+MINIMUM_PYTHON_MINOR = 9
 
 
 def main() -> int:
@@ -18,7 +21,14 @@ def main() -> int:
         if "__pycache__" not in path.parts
     )
     for path in python_files:
-        compile(path.read_text(encoding="utf-8"), str(path), "exec")
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(
+            source,
+            filename=str(path),
+            mode="exec",
+            feature_version=MINIMUM_PYTHON_MINOR,
+        )
+        compile(tree, str(path), "exec")
 
     json_files = sorted((root / "src" / "anki_lookup").glob("*.json"))
     for path in json_files:
